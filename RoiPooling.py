@@ -115,6 +115,6 @@ class RoiPooling(Layer):
                             outputs.append(pooled_val)
 
         final_output = K.concatenate(outputs, axis=0)
-        final_output = K.reshape(final_output, (1, self.num_rois, self.nb_channels * self.num_outputs_per_channel))
+        final_output = K.reshape(final_output, (input_shape[0], self.num_rois, self.nb_channels * self.num_outputs_per_channel))
 
         return final_output
