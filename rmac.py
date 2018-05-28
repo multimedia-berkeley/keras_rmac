@@ -1,6 +1,7 @@
 from __future__ import division
 from __future__ import print_function
 
+import tensorflow as tf
 from keras.layers import Lambda, Dense, TimeDistributed, Input
 from keras.models import Model
 from keras.preprocessing import image
@@ -42,7 +43,7 @@ def rmac(input_shape, num_rois):
 
     # ROI pooling
     x = RoiPooling([1], num_rois)([vgg16_model.layers[-1].output, in_roi])
-#    print('ROI pooling layer name:', vgg16_model.layers[-1].output)
+ #   print('ROI pooling layer name:', vgg16_model.layers[-1].output)
 
     # Normalization
     x = Lambda(lambda x: K.l2_normalize(x, axis=2), name='norm1')(x)
@@ -88,11 +89,17 @@ if __name__ == "__main__":
     new_size = (int(np.ceil(scale * img.size[0])), int(np.ceil(scale * img.size[1])))
     print('Original size: %s, Resized image: %s' %(str(img.size), str(new_size)))
     img = img.resize(new_size)
-
+    
+    num_data = 128
+    print('num_data:', num_data)
     # Mean substraction
     x = image.img_to_array(img)
     #x = np.expand_dims(x, axis=0)
-    x = np.array([x,x])
+#    x = np.array([x,x])
+    #x = np.repeat(x, num_data, axis=0)
+    x = np.array([x for i in range(num_data)])
+    print(x.shape)
+
     #x = np.array([x,x])
     x = utils.preprocess_image(x)
     
@@ -104,27 +111,38 @@ if __name__ == "__main__":
     
     print('Loading RMAC model...')
     print(x.shape[1], x.shape[2], x.shape[3], len(regions))
-    with tf.device('/cpu:0'):
+    
+    PARALLEL = True
+    num_gpu = 2
+    if PARALLEL:
+        with tf.device('/cpu:0'):
+            model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
+        parallel_model = multi_gpu_model(model, gpus=num_gpu)
+    
+    else:
         model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
-   
+     
 
-    #parallel_model = multi_gpu_model(model, gpus=4)
     #regions = np.array([regions, regions])
     # Compute RMAC vector
     print('Extracting RMAC from image...')
     #regions = np.expand_dims(regions, axis=0) 
-    regions = np.array([regions,regions])
+    #regions = np.array([regions,regions])
+    #regions = np.tile(regions, (num_data, 1))
+    regions = np.array([regions for i in range(num_data)])
     print(np.shape(regions))
     print(np.shape(x))
     #input_x = [np.array([x,x]), np.array([regions, regions])]
     input_x = [x, regions] 
     start = time.time()
-    RMAC = model.predict(input_x)
-        #RMAC = model.predict([x, regions])
+    if PARALLEL:
+        RMAC = parallel_model.predict(input_x, batch_size=8 * num_gpu)
+    else:
+        RMAC = model.predict(input_x, batch_size=8)
     print('RMAC size:', RMAC.shape)
-    print(time.time() - start, 'seconds for 100 images')
+    print(time.time() - start, 'seconds for %d images'%(num_data))
 
     #print(RMAC)
     #print(sorted(RMAC[0]))
-    #print('norm:', np.linalg.norm(RMAC[0]))
+    print('norm:', np.linalg.norm(RMAC[0]))
     print('Done!')
