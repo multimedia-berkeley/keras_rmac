@@ -188,7 +188,7 @@ if __name__ == "__main__":
             print(len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
             start = time.time()
             count += len(rmac_batch) 
-            if count > 10000:
+            if count > 5000:
                 count = 0 
                 with open(output_file, 'wb') as f:
                     pickle.dump((filename_output, rmac_result), f)
