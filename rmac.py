@@ -4,6 +4,7 @@ from __future__ import print_function
 from keras.layers import Lambda, Dense, TimeDistributed, Input
 from keras.models import Model
 from keras.preprocessing import image
+from keras.utils import multi_gpu_model
 import keras.backend as K
 
 from vgg16 import VGG16
@@ -40,7 +41,8 @@ def rmac(input_shape, num_rois):
     in_roi = Input(shape=(num_rois, 4), name='input_roi')
 
     # ROI pooling
-    x = RoiPooling([1], num_rois)([vgg16_model.layers[-5].output, in_roi])
+    x = RoiPooling([1], num_rois)([vgg16_model.layers[-1].output, in_roi])
+#    print('ROI pooling layer name:', vgg16_model.layers[-1].output)
 
     # Normalization
     x = Lambda(lambda x: K.l2_normalize(x, axis=2), name='norm1')(x)
@@ -67,6 +69,9 @@ def rmac(input_shape, num_rois):
     b = np.squeeze(mat['bias'], axis=1)
     w = np.transpose(mat['weights'])
     model.layers[-4].set_weights([w, b])
+ #   print('layer name:', model.layers[-4].name)
+  #  for idx, layer in enumerate(model.layers):
+  #      print(idx, layer.name)
 
     return model
 
@@ -99,8 +104,11 @@ if __name__ == "__main__":
     
     print('Loading RMAC model...')
     print(x.shape[1], x.shape[2], x.shape[3], len(regions))
-    model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
-    
+    with tf.device('/cpu:0'):
+        model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
+   
+
+    #parallel_model = multi_gpu_model(model, gpus=4)
     #regions = np.array([regions, regions])
     # Compute RMAC vector
     print('Extracting RMAC from image...')
@@ -111,11 +119,12 @@ if __name__ == "__main__":
     #input_x = [np.array([x,x]), np.array([regions, regions])]
     input_x = [x, regions] 
     start = time.time()
-    for i in range(0,100):
-        RMAC = model.predict(input_x, batch_size=3)
+    RMAC = model.predict(input_x)
         #RMAC = model.predict([x, regions])
-        print('RMAC size:', RMAC.shape)
+    print('RMAC size:', RMAC.shape)
     print(time.time() - start, 'seconds for 100 images')
 
     #print(RMAC)
+    #print(sorted(RMAC[0]))
+    #print('norm:', np.linalg.norm(RMAC[0]))
     print('Done!')
