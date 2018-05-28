@@ -18,6 +18,7 @@ import utils
 import time
 import os
 import cPickle as pickle
+import sys
 
 #K.set_image_dim_ordering('th')
 def addition(x):
@@ -79,7 +80,7 @@ def rmac(input_shape, num_rois):
 
 
 
-def load_model(x):
+def load_model(x, multi='parallel'):
     x = np.array(x)
     print('cur batch tensor shape', x.shape)
     x = utils.preprocess_image(x)
@@ -93,10 +94,14 @@ def load_model(x):
     print(x.shape[1], x.shape[2], x.shape[3], len(regions))
     
     if PARALLEL:
-        with tf.device('/cpu:0'):
+        if multi=='single':
             model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
-        parallel_model = multi_gpu_model(model, gpus=num_gpu)
-        return parallel_model, regions
+            return model, regions
+        else:
+            with tf.device('/cpu:0'):
+                model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
+            parallel_model = multi_gpu_model(model, gpus=num_gpu)
+            return parallel_model, regions
     else:
         model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
         return model, regions
@@ -119,7 +124,7 @@ def extract_feature(x, model, regions):
     input_x = [x, regions] 
     start = time.time()
     if PARALLEL:
-        RMAC = model.predict(input_x, batch_size= BATCH_SIZE * num_gpu)
+        RMAC = model.predict(input_x, batch_size=BATCH_SIZE * num_gpu)
     else:
         RMAC = model.predict(input_x, batch_size=BATCH_SIZE)
     print('RMAC size:', RMAC.shape)
@@ -132,25 +137,32 @@ def extract_feature(x, model, regions):
     return RMAC
 
 if __name__ == "__main__":
+    INPUT_FILE = sys.argv[1]
+    split_name = INPUT_FILE.split('_')[1]
+    print('Split:', split_name)
     PARALLEL = True
-    num_gpu = 16
-    BATCH_SIZE = 24
+    num_gpu = 2
+    BATCH_SIZE = 40
     # Load sample image
 #    file = utils.DATA_DIR + 'sample.jpg'
-    DATASET = 'test' 
-    PATH_IMAGE = '/data/landmark/images/' + DATASET + '_resized'
-    with open('../landmark/test_group_by_size.pickle', 'rb') as f:
+    DATASET = 'train' 
+    output_file = 'rmac_' + DATASET + '_' + split_name + '.pickle'
+    print('output_file name', output_file)
+    PATH_IMAGE = '/g/g92/choi13/projects/landmark/data/recognition/' + DATASET + '_resized'
+    with open('/g/g92/choi13/projects/landmark/'+ INPUT_FILE, 'rb') as f:
         d = pickle.load(f)
 
     #for key in d.keys():
     len_by_key = [(key, len(d[key])) for key in d.keys()]
     len_by_key = sorted(len_by_key, key=lambda x:x[1], reverse=True)
     rmac_result = list()
+    filename_output = list()
     for size, _ in len_by_key:
         filelist = d[size]
         #for filename in filelist:
         first_batch = True
         start = time.time()
+        count = 0 
         while len(filelist) > 0:
             cur_batch = filelist[:BATCH_SIZE * num_gpu]
             filelist = filelist[BATCH_SIZE * num_gpu:]
@@ -160,22 +172,31 @@ if __name__ == "__main__":
                 img = image.load_img(cur_file)
                 x = image.img_to_array(img)
                 l_imgs.append(x)
-            
+            filename_output.extend(cur_batch) 
             l_imgs = np.array(l_imgs)
             print('cur batch tensor shape', l_imgs.shape)
             l_imgs = utils.preprocess_image(l_imgs)
-            if first_batch: 
+            if len(l_imgs) < num_gpu:
+                model, regions = load_model(l_imgs, 'single')
+
+            elif first_batch: 
                 model, regions = load_model(l_imgs)
-                first_batch = False
+                first_batch = False 
+
             rmac_batch = extract_feature(l_imgs, model, regions)
             rmac_result.extend(rmac_batch)
-            print(len(filelist), 'remaining:', (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
+            print(len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
             start = time.time()
-            with open('rmac_' + DATASET + '.pickle', 'wb') as f:
-                pickle.dump(rmac_result, f)
+            count += len(rmac_batch) 
+            if count > 10000:
+                count = 0 
+                with open(output_file, 'wb') as f:
+                    pickle.dump((filename_output, rmac_result), f)
+                print('Saved rmac_result')
+                    
 
-    with open('rmac_' + DATASET + '.pickle', 'wb') as f:
-        pickle.dump(rmac_result, f)
+    with open(output_file, 'wb') as f:
+        pickle.dump((filename_output, rmac_result), f)
     # Resize
     #scale = utils.IMG_SIZE / max(img.size)
     #new_size = (int(np.ceil(scale * img.size[0])), int(np.ceil(scale * img.size[1])))
