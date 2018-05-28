@@ -145,7 +145,7 @@ if __name__ == "__main__":
     BATCH_SIZE = 40
     # Load sample image
 #    file = utils.DATA_DIR + 'sample.jpg'
-    DATASET = 'train' 
+    DATASET = 'index' 
     output_file = 'rmac_' + DATASET + '_' + split_name + '.pickle'
     print('output_file name', output_file)
     PATH_IMAGE = '/g/g92/choi13/projects/landmark/data/recognition/' + DATASET + '_resized'
@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
             rmac_batch = extract_feature(l_imgs, model, regions)
             rmac_result.extend(rmac_batch)
-            print(len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
+            print('[%s]'%(split_name), len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
             start = time.time()
             count += len(rmac_batch) 
             if count > 5000:
