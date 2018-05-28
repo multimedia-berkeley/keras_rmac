@@ -132,8 +132,7 @@ def extract_feature(x, model, regions):
 
     #print(RMAC)
     #print(sorted(RMAC[0]))
-    print('norm:', np.linalg.norm(RMAC[0]))
-    print('Done!')
+    #print('norm:', np.linalg.norm(RMAC[0]))
     return RMAC
 
 if __name__ == "__main__":
@@ -141,22 +140,33 @@ if __name__ == "__main__":
     split_name = INPUT_FILE.split('_')[1]
     print('Split:', split_name)
     PARALLEL = True
-    num_gpu = 2
-    BATCH_SIZE = 40
+    num_gpu = 16#pascal 2
+    BATCH_SIZE = 16 #pascal 40
     # Load sample image
 #    file = utils.DATA_DIR + 'sample.jpg'
-    DATASET = 'train' 
+    DATASET = 'test' 
     output_file = 'rmac_' + DATASET + '_' + split_name + '.pickle'
     print('output_file name', output_file)
-    PATH_IMAGE = '/g/g92/choi13/projects/landmark/data/recognition/' + DATASET + '_resized'
-    with open('/g/g92/choi13/projects/landmark/'+ INPUT_FILE, 'rb') as f:
+    try:
+        with open(output_file, 'rb') as f:
+            partial_result = pickle.load(f)
+            filename_output = partial_result[0]
+            rmac_result = partial_result[1]
+            assert len(rmac_result[0]) == len(rmac_result[1])
+            print('SKipping', len(filename_output), 'files')
+            completed_files = set(filename_output)
+    except:
+        rmac_result = list()
+        filename_output = list()
+        
+    #PATH_IMAGE = '/g/g92/choi13/projects/landmark/data/recognition/' + DATASET + '_resized'
+    PATH_IMAGE = '/data/landmark/images/' + DATASET + '_resized'
+    with open('../landmark/'+ INPUT_FILE, 'rb') as f:
         d = pickle.load(f)
 
     #for key in d.keys():
     len_by_key = [(key, len(d[key])) for key in d.keys()]
     len_by_key = sorted(len_by_key, key=lambda x:x[1], reverse=True)
-    rmac_result = list()
-    filename_output = list()
     for size, _ in len_by_key:
         filelist = d[size]
         #for filename in filelist:
@@ -168,6 +178,8 @@ if __name__ == "__main__":
             filelist = filelist[BATCH_SIZE * num_gpu:]
             l_imgs = list()
             for filename in cur_batch:
+                if filename in completed_files:
+                    continue
                 cur_file = os.path.join(PATH_IMAGE, filename)
                 img = image.load_img(cur_file)
                 x = image.img_to_array(img)
@@ -175,6 +187,9 @@ if __name__ == "__main__":
             filename_output.extend(cur_batch) 
             l_imgs = np.array(l_imgs)
             print('cur batch tensor shape', l_imgs.shape)
+            if l_imgs.shape[0] == 0 :
+                continue
+        
             l_imgs = utils.preprocess_image(l_imgs)
             if len(l_imgs) < num_gpu:
                 model, regions = load_model(l_imgs, 'single')
