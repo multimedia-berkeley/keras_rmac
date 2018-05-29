@@ -117,7 +117,7 @@ def extract_feature(x, model, regions):
     #regions = np.tile(regions, (num_data, 1))
     
     regions = np.array([regions for i in range(num_data)])
-    
+
     print(np.shape(regions))
     print(np.shape(x))
     #input_x = [np.array([x,x]), np.array([regions, regions])]
@@ -129,7 +129,6 @@ def extract_feature(x, model, regions):
         RMAC = model.predict(input_x, batch_size=BATCH_SIZE)
     print('RMAC size:', RMAC.shape)
     print(time.time() - start, 'seconds for %d images'%(num_data))
-
     #print(RMAC)
     #print(sorted(RMAC[0]))
     #print('norm:', np.linalg.norm(RMAC[0]))
@@ -137,11 +136,12 @@ def extract_feature(x, model, regions):
 
 if __name__ == "__main__":
     INPUT_FILE = sys.argv[1]
+    LAST_MINUTE = True
     split_name = INPUT_FILE.split('_')[1]
     print('Split:', split_name)
     PARALLEL = True
     num_gpu = 16#pascal 2
-    BATCH_SIZE = 16 #pascal 40
+    BATCH_SIZE = 24#pascal 40
     # Load sample image
 #    file = utils.DATA_DIR + 'sample.jpg'
     DATASET = 'test' 
@@ -158,7 +158,11 @@ if __name__ == "__main__":
     except:
         rmac_result = list()
         filename_output = list()
-        
+    
+    if LAST_MINUTE: 
+        rmac_result = list()
+        filename_output = list()
+
     #PATH_IMAGE = '/g/g92/choi13/projects/landmark/data/recognition/' + DATASET + '_resized'
     PATH_IMAGE = '/data/landmark/images/' + DATASET + '_resized'
     with open('../landmark/'+ INPUT_FILE, 'rb') as f:
@@ -167,12 +171,12 @@ if __name__ == "__main__":
     #for key in d.keys():
     len_by_key = [(key, len(d[key])) for key in d.keys()]
     len_by_key = sorted(len_by_key, key=lambda x:x[1], reverse=True)
+    count = 0 
     for size, _ in len_by_key:
         filelist = d[size]
         #for filename in filelist:
         first_batch = True
         start = time.time()
-        count = 0 
         while len(filelist) > 0:
             cur_batch = filelist[:BATCH_SIZE * num_gpu]
             filelist = filelist[BATCH_SIZE * num_gpu:]
@@ -203,7 +207,7 @@ if __name__ == "__main__":
             print(len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
             start = time.time()
             count += len(rmac_batch) 
-            if count > 5000:
+            if count > 100:
                 count = 0 
                 with open(output_file, 'wb') as f:
                     pickle.dump((filename_output, rmac_result), f)
