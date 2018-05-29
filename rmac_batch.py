@@ -19,6 +19,7 @@ import time
 import os
 import cPickle as pickle
 import sys
+import traceback
 
 #K.set_image_dim_ordering('th')
 def addition(x):
@@ -120,6 +121,7 @@ def extract_feature(x, model, regions):
 
     print(np.shape(regions))
     print(np.shape(x))
+
     #input_x = [np.array([x,x]), np.array([regions, regions])]
     input_x = [x, regions] 
     start = time.time()
@@ -146,6 +148,7 @@ if __name__ == "__main__":
 #    file = utils.DATA_DIR + 'sample.jpg'
     DATASET = 'test' 
     output_file = 'rmac_' + DATASET + '_' + split_name + '.pickle'
+    output_file = os.path.join('/g/g92/choi13/src/keras_rmac/rmac_result', output_file)
     print('output_file name', output_file)
     try:
         with open(output_file, 'rb') as f:
@@ -156,6 +159,8 @@ if __name__ == "__main__":
             print('SKipping', len(filename_output), 'files')
             completed_files = set(filename_output)
     except:
+        print(split_name)
+        print(traceback.print_exc())
         rmac_result = list()
         filename_output = list()
     
@@ -166,6 +171,14 @@ if __name__ == "__main__":
     #PATH_IMAGE = '/g/g92/choi13/projects/landmark/data/recognition/' + DATASET + '_resized'
     PATH_IMAGE = '/data/landmark/images/' + DATASET + '_resized'
     with open('../landmark/'+ INPUT_FILE, 'rb') as f:
+        completed_files = list()
+
+    if LAST_MINUTE:
+        filename_output = list()
+        rmac_result = list()
+
+    #PATH_IMAGE = '/data/landmark/images/' + DATASET + '_resized'
+    with open('/g/g92/choi13/projects/landmark/'+ INPUT_FILE, 'rb') as f:
         d = pickle.load(f)
 
     #for key in d.keys():
@@ -188,12 +201,12 @@ if __name__ == "__main__":
                 img = image.load_img(cur_file)
                 x = image.img_to_array(img)
                 l_imgs.append(x)
-            filename_output.extend(cur_batch) 
             l_imgs = np.array(l_imgs)
-            print('cur batch tensor shape', l_imgs.shape)
+            #print('cur batch tensor shape', l_imgs.shape)
             if l_imgs.shape[0] == 0 :
                 continue
         
+            filename_output.extend(cur_batch) 
             l_imgs = utils.preprocess_image(l_imgs)
             if len(l_imgs) < num_gpu:
                 model, regions = load_model(l_imgs, 'single')
@@ -204,10 +217,10 @@ if __name__ == "__main__":
 
             rmac_batch = extract_feature(l_imgs, model, regions)
             rmac_result.extend(rmac_batch)
-            print(len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
+            print('[%s]'%(split_name), len(filelist), 'remaining. finished:', len(rmac_result), (time.time() - start)/(BATCH_SIZE* num_gpu) * 100, 'seconds for 100 images')
             start = time.time()
             count += len(rmac_batch) 
-            if count > 100:
+            if count > 200:
                 count = 0 
                 with open(output_file, 'wb') as f:
                     pickle.dump((filename_output, rmac_result), f)
