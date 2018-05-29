@@ -78,6 +78,9 @@ def rmac(input_shape, num_rois):
 
 
 if __name__ == "__main__":
+    PARALLEL = True
+    num_gpu = 16
+    BATCH_SIZE = 64
 
     # Load sample image
     file = utils.DATA_DIR + 'sample.jpg'
@@ -90,7 +93,7 @@ if __name__ == "__main__":
     print('Original size: %s, Resized image: %s' %(str(img.size), str(new_size)))
     img = img.resize(new_size)
     
-    num_data = 128
+    num_data = num_gpu * BATCH_SIZE
     print('num_data:', num_data)
     # Mean substraction
     x = image.img_to_array(img)
@@ -112,8 +115,6 @@ if __name__ == "__main__":
     print('Loading RMAC model...')
     print(x.shape[1], x.shape[2], x.shape[3], len(regions))
     
-    PARALLEL = True
-    num_gpu = 2
     if PARALLEL:
         with tf.device('/cpu:0'):
             model = rmac((x.shape[1], x.shape[2], x.shape[3]), len(regions))
@@ -136,9 +137,9 @@ if __name__ == "__main__":
     input_x = [x, regions] 
     start = time.time()
     if PARALLEL:
-        RMAC = parallel_model.predict(input_x, batch_size=8 * num_gpu)
+        RMAC = parallel_model.predict(input_x, batch_size= BATCH_SIZE * num_gpu)
     else:
-        RMAC = model.predict(input_x, batch_size=8)
+        RMAC = model.predict(input_x, batch_size=BATCH_SIZE)
     print('RMAC size:', RMAC.shape)
     print(time.time() - start, 'seconds for %d images'%(num_data))
 
